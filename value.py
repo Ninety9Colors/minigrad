@@ -1,37 +1,44 @@
 from collections import deque
 import copy
 
+e = 2.718281828459045
+
 # Wrapper for algebraic types
 class Value:
-    def __init__(self, value, children=(), op=''):
+    def __init__(self, value, children=(), op=None):
         self.data = value
         self.grad = 0
-        self.respect_to = None
         
         self.children = children
         self.op = op
     
-    def calc_grad(self, respect_to=None):
+    def calc_grad(self):
         if self.children:
             a,b = self.children
             if self.op == '+':
                 a.grad += self.grad
                 b.grad += self.grad
-
-                a.respect_to = respect_to
-                b.respect_to = respect_to
             elif self.op == '*':
                 a.grad += b.data*self.grad
                 b.grad += a.data*self.grad
-
-                a.respect_to = respect_to
-                b.respect_to = respect_to
             elif self.op == '**':
                 a.grad += (b.data*a.data**(b.data-1))*self.grad
-                b.grad += (self.ln(a.data)*a.data**b.data)*self.grad
-
-                a.respect_to = respect_to
-                b.respect_to = respect_to
+                b.grad += (a.ln().data*a.data**b.data)*self.grad
+            elif self.op == 'ln':
+                if self.data == 0:
+                    a.grad += 0
+                else:
+                    a.grad += (1/self.data)*self.grad
+            elif self.op == 'relu':
+                a.grad += (self.data != 0) * self.grad
+            elif self.op == 'leaky_relu':
+                if self.data <= 0:
+                    a.grad += (0.01)*self.grad
+                else:
+                    a.grad += self.grad
+            elif self.op == 'sigmoid':
+                sig = a.sigmoid().data
+                a.grad += sig * (1 - sig) * self.grad
     def backward(self):
         topo = []
         visited = set()
@@ -47,13 +54,27 @@ class Value:
         
         self.grad = 1
         for n in reversed(topo):
-            n.calc_grad(self)
+            n.calc_grad()
     
     # Natural log approximation
-    def ln(self, o):
-        o = self.data if o == None else o
-        assert(o>0)
-        return 99999999*(o**(1/99999999)-1)
+    def ln(self):
+        if self.data <= 0:
+            return Value(0, (self, None), op='ln')
+        else: 
+            return Value(99999999*(self.data**(1/99999999)-1), (self,None), op='ln')
+        
+    def sigmoid(self):
+        return Value(1/(1+e**(-self.data)), (self, None), 'sigmoid')
+    
+    def relu(self):
+        if self.data <= 0:
+            return Value(0, (self, None), 'relu')
+        return Value(self.data, (self, None), 'relu')
+    
+    def leaky_relu(self):
+        if self.data <= 0:
+            return Value(self.data*0.01, (self, None), 'leaky_relu')
+        return Value(self.data, (self, None), 'leaky_relu')
 
     def __repr__(self):
         return f'Value(data={self.data}, grad={self.grad})'
