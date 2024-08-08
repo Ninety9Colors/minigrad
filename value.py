@@ -27,7 +27,11 @@ class Value:
                 b.grad += a.data*self.grad
             elif self.op == '**':
                 a.grad += (b.data*a.data**(b.data-1))*self.grad
-                b.grad += (a.ln().data*a.data**b.data)*self.grad
+                ln = a.ln().data
+                if ln != 'undefined':
+                    b.grad += (a.ln().data*a.data**b.data)*self.grad
+                else:
+                    b.grad = 'undefined'
             elif self.op == 'ln':
                 if a.data == 0:
                     a.grad += float('inf')
