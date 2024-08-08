@@ -53,6 +53,7 @@ class Value:
                         visited.add(n)
                         topo_sort(n.children)
                         topo.append(n)
+                        n.grad = 0
         topo_sort(self.children)
         topo.append(self)
         
