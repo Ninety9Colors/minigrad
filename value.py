@@ -15,7 +15,11 @@ class Value:
     def calc_grad(self):
         if self.children:
             a,b = self.children
-            if self.op == '+':
+            if self.grad == 'undefined':
+                a.grad = 'undefined'
+                if b:
+                    b.grad = 'undefined'
+            elif self.op == '+':
                 a.grad += self.grad
                 b.grad += self.grad
             elif self.op == '*':
@@ -25,10 +29,10 @@ class Value:
                 a.grad += (b.data*a.data**(b.data-1))*self.grad
                 b.grad += (a.ln().data*a.data**b.data)*self.grad
             elif self.op == 'ln':
-                if self.data == 0:
-                    a.grad += 0
+                if a.data == 0:
+                    a.grad += float('inf')
                 else:
-                    a.grad += (1/self.data)*self.grad
+                    a.grad += (1/a.data)*self.grad
             elif self.op == 'relu':
                 a.grad += (self.data != 0) * self.grad
             elif self.op == 'leaky_relu':
@@ -58,8 +62,10 @@ class Value:
     
     # Natural log approximation
     def ln(self):
-        if self.data <= 0:
-            return Value(0, (self, None), op='ln')
+        if self.data < 0:
+            return Value('undefined', (self, None), op='ln')
+        elif self.data == 0:
+            return Value(-float('inf'), (self, None), op='ln')
         else: 
             return Value(99999999*(self.data**(1/99999999)-1), (self,None), op='ln')
         
