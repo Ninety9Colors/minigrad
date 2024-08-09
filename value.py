@@ -1,54 +1,41 @@
 from collections import deque
-import copy
 
 e = 2.718281828459045
 
-# Wrapper for algebraic types
+# Wrapper for scalar values
 class Value:
     def __init__(self, value, children=(), op=None):
         self.data = value
         self.grad = 0
         
+        # Tuple containing list of 1+ operands
         self.children = children
+
+        # Operator used to calculate the current value
         self.op = op
     
+    # Propagates the current gradient backward to the value's children using the current operator and its derivative
     def calc_grad(self):
         if self.children:
-            a,b = self.children
+            # If undefined, all gradients become undefined
             if self.grad == 'undefined':
-                a.grad = 'undefined'
-                if b:
-                    b.grad = 'undefined'
-            elif self.op == '+':
-                a.grad += self.grad
-                b.grad += self.grad
-            elif self.op == '*':
-                a.grad += b.data*self.grad
-                b.grad += a.data*self.grad
-            elif self.op == '**':
-                a.grad += (b.data*a.data**(b.data-1))*self.grad
-                ln = a.ln().data
-                if ln != 'undefined' and ln != -float('inf'):
-                    b.grad += (a.ln().data*a.data**b.data)*self.grad
-                else:
-                    b.grad = 'undefined' if ln == 'undefined' else -float('inf')
+                for c in self.children:
+                    c.grad = 'undefined'
+
+            # Check for custom operators, if not use default arithmetic derivative calculations
             elif self.op == 'ln':
-                if a.data == 'undefined':
-                    a.grad = 'undefined'
-                elif a.data == 0:
-                    a.grad += float('inf')
-                else:
-                    a.grad += (1/a.data)*self.grad
+                self.ln_grad(self.children[0])
             elif self.op == 'relu':
-                a.grad += (self.data != 0) * self.grad
+                self.relu_grad(self.children[0])
             elif self.op == 'leaky_relu':
-                if self.data <= 0:
-                    a.grad += (0.01)*self.grad
-                else:
-                    a.grad += self.grad
+                self.leaky_relu_grad(self.children[0])
             elif self.op == 'sigmoid':
-                sig = a.sigmoid().data
-                a.grad += sig * (1 - sig) * self.grad
+                self.sigmoid_grad(self.children[0])
+            else:
+                self.default_grad()
+
+    # Sorts a value DAG topologically and propagates the gradient through it, starting from the most recently calculated value
+    # Also zeroes the gradients for each value
     def backward(self):
         q = deque([self])
         topo = []
@@ -66,31 +53,72 @@ class Value:
             else:
                 for c in children:
                     q.append(c)
+
+        # Set current top node gradient to 1 to prepare for backpropagation
         self.grad = 1
         for n in reversed(topo):
             n.calc_grad()
-    
+
+    # Basic arithmetic derivatives
+    def default_grad(self):
+        a,b = self.children
+        if self.op == '+':
+            a.grad += self.grad
+            b.grad += self.grad
+        elif self.op == '*':
+            a.grad += b.data*self.grad
+            b.grad += a.data*self.grad
+        elif self.op == '**':
+            a.grad += (b.data*a.data**(b.data-1))*self.grad
+            ln = a.ln().data
+            if ln != 'undefined' and ln != -float('inf'):
+                b.grad += (a.ln().data*a.data**b.data)*self.grad
+            else: b.grad = 'undefined'
+
+
+    # ---------------------------------
+    # CUSTOM OPERATIONS AND DERIVATIVES
+
     # Natural log approximation
     def ln(self):
-        if self.data < 0:
-            return Value('undefined', (self, None), op='ln')
-        elif self.data == 0:
-            return Value(-float('inf'), (self, None), op='ln')
-        else: 
-            return Value(99999999*(self.data**(1/99999999)-1), (self,None), op='ln')
-        
+        if self.data < 0: return Value('undefined', (self,), op='ln')
+        elif self.data == 0: return Value(-float('inf'), (self,), op='ln')
+        else: return Value(99999999*(self.data**(1/99999999)-1), (self,), op='ln')
+    def ln_grad(self, operand):
+        assert isinstance(operand, Value)
+
+        if operand.data == 'undefined': operand.grad = 'undefined'
+        elif operand.data == 0: operand.grad += float('inf')
+        else: operand.grad += (1/operand.data)*self.grad
+    
+    # Returns a value between 0 and 1
     def sigmoid(self):
-        return Value(1/(1+e**(-self.data)), (self, None), 'sigmoid')
+        return Value(1/(1+e**(-self.data)), (self,), 'sigmoid')
+    def sigmoid_grad(self, operand):
+        assert isinstance(operand, Value)
+        sig = operand.sigmoid().data
+        operand.grad += sig * (1 - sig) * self.grad
     
+    # Returns a value clamped to >= 0
     def relu(self):
-        if self.data <= 0:
-            return Value(0, (self, None), 'relu')
-        return Value(self.data, (self, None), 'relu')
+        if self.data <= 0: return Value(0, (self,), 'relu')
+        return Value(self.data, (self,), 'relu')
+    def relu_grad(self, operand):
+        assert isinstance(operand, Value)
+        operand.grad += (self.data != 0) * self.grad
     
+    # Returns a value that is decreased significantly if it is smaller than 0
     def leaky_relu(self):
-        if self.data <= 0:
-            return Value(self.data*0.01, (self, None), 'leaky_relu')
-        return Value(self.data, (self, None), 'leaky_relu')
+        if self.data <= 0: return Value(self.data*0.01, (self,), 'leaky_relu')
+        return Value(self.data, (self,), 'leaky_relu')
+    def leaky_relu_grad(self, operand):
+        assert isinstance(operand, Value)
+        if self.data <= 0: operand.grad += (0.01)*self.grad
+        else: operand.grad += self.grad
+    
+    # ---------------------------------
+
+
 
     def __repr__(self):
         return f'Value(data={self.data}, grad={self.grad})'
