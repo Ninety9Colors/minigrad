@@ -19,8 +19,8 @@ class Neuron:
     
     def __repr__(self, verbose=False):
         if verbose:
-            return f"Neuron(input_size={len(self.w)}, w={[v.data for v in self.w]}, b={self.b.data})"
-        return f"Neuron(input_size={len(self.w)})"
+            return f"Neuron(input_size={len(self.w)}, activation={self.activation}, w={[v.data for v in self.w]}, b={self.b.data})"
+        return f"Neuron(input_size={len(self.w)}, activation={self.activation})"
     
     def predict(self, x_input):
         assert len(x_input) == len(self.w)
@@ -44,7 +44,7 @@ class Layer:
     def __init__(self, input_size, output_size, seed=None, activation=None):
         if seed:
             random.seed(seed)
-        self.neurons = [Neuron(input_size, activation) for _ in range(output_size)]
+        self.neurons = [Neuron(input_size, activation=activation) for _ in range(output_size)]
     
     def __repr__(self, verbose=False):
         if verbose:
@@ -52,7 +52,7 @@ class Layer:
             for n in self.neurons:
                 result += n.__repr__(True) + '\n'
             return result + ')'
-        return f"Layer(input_size={len(self.neurons[0].w)}, output_size={len(self.neurons)})"
+        return f"Layer(input_size={len(self.neurons[0].w)}, output_size={len(self.neurons)}, activation={self.activation})"
 
     def predict(self, x_input):
         assert len(x_input) == len(self.neurons[0].w)
@@ -68,15 +68,15 @@ class Layer:
         return result
 
 class MLP:
-    def __init__(self, input_size, layer_sizes, cost = None, seed=None, final_activation=None):
+    def __init__(self, input_size, layer_sizes, cost = None, seed=None, inner_activation=None, final_activation=None):
         random.seed(seed)
         sizes = [input_size]+layer_sizes
         if cost:
             self.cost = cost
         else:
             self.cost = self.mse
-        self.layers = [Layer(sizes[i-1], sizes[i], 'relu') for i in range(1, len(sizes)-1)]
-        self.layers.append(Layer(sizes[-2], sizes[-1], final_activation))
+        self.layers = [Layer(sizes[i-1], sizes[i], activation=inner_activation) for i in range(1, len(sizes)-1)]
+        self.layers.append(Layer(sizes[-2], sizes[-1], activation=final_activation))
     
     def __repr__(self, verbose=False):
         if verbose:
