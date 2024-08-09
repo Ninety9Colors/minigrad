@@ -27,10 +27,11 @@ class Value:
                 b.grad += a.data*self.grad
             elif self.op == '**':
                 a.grad += (b.data*a.data**(b.data-1))*self.grad
-                if a.data > 0:
+                ln = a.ln().data
+                if ln != 'undefined' and ln != -float('inf'):
                     b.grad += (a.ln().data*a.data**b.data)*self.grad
                 else:
-                    b.grad = 'undefined'
+                    b.grad = 'undefined' if ln == 'undefined' else -float('inf')
             elif self.op == 'ln':
                 if a.data == 'undefined':
                     a.grad = 'undefined'
@@ -49,18 +50,22 @@ class Value:
                 sig = a.sigmoid().data
                 a.grad += sig * (1 - sig) * self.grad
     def backward(self):
+        q = deque([self])
         topo = []
         visited = set()
-        def topo_sort(nodes):
-            for n in nodes:
-                if isinstance(n, Value):
-                    if n not in visited:
-                        visited.add(n)
-                        topo_sort(n.children)
-                        topo.append(n)
-        topo_sort(self.children)
-        topo.append(self)
+        visited.add(self)
         
+        while q:
+            curr = q[-1]
+            visited.add(curr)
+            curr.grad = 0
+            children = [c for c in curr.children if isinstance(c, Value) and c not in visited]
+            if not children:
+                topo.append(curr)
+                q.pop()
+            else:
+                for c in children:
+                    q.append(c)
         self.grad = 1
         for n in reversed(topo):
             n.calc_grad()
