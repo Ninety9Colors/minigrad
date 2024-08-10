@@ -110,7 +110,7 @@ class MLP:
 
         # MSE Loss
         y_predict = self(x_input)
-        loss = sum((y_predict[i][j]-y_target[i][j])**2 for j in range(len(y_target[0])) for i in range(len(y_target)))
+        loss = sum((y_predict[i][j]-y_target[i][j])**2 for j in range(len(y_target[0])) for i in range(len(y_target))) / (len(y_target)*2)
 
         # L2 Loss
         reg_loss = lambda_ * sum((p*p for p in self.parameters()))
